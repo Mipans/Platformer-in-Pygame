@@ -1,4 +1,4 @@
-from platform import platform
+import math
 import pygame
 pygame.init()
 
@@ -19,7 +19,7 @@ FPS = 60
 # # # # # #
 
 
-class Platform():
+class SemiSolid():
     def __init__(self, x, y, widht, height, colour):
         self.x = x
         self.y = y
@@ -28,7 +28,7 @@ class Platform():
         self.colour = colour
 
         self.x_end = self.x + self.widht
-        self.y_end = self.y + self.height
+        self.y_end = self.y - self.height
     
     def draw(self, win):
         x = self.x + WIDHT//2
@@ -40,14 +40,16 @@ class Platform():
 
 class Player():
     FORCE = 1
-    UPFORCE = 25
+    GRAVITY = 3
+    UPFORCE = 40
     
-    def __init__(self, x, y, radious, colour, up_key, left_key, right_key):
+    def __init__(self, x, y, radious, colour, up_key, down_key, left_key, right_key):
         self.x = x
         self.y = y
         self.radious = radious
         self.colour = colour
         self.up_key = up_key
+        self.down_key = down_key
         self.right_key = right_key
         self.left_key = left_key
 
@@ -56,9 +58,9 @@ class Player():
     
     def draw(self, win):
         x = self.x + WIDHT//2
-        y = HEIGHT - self.y + self.radious
+        y = HEIGHT - self.y - self.radious
 
-        pygame.draw.circle(win, self.colour, (x, y), self.radious)
+        pygame.draw.circle(win, self.colour, (x, y), self.radious + 1)
     
     def move(self):
         key = pygame.key.get_pressed()
@@ -76,31 +78,54 @@ class Player():
             self.x_vel -= Player.FORCE
 
         # moving
-        if abs(self.x+self.x_vel)+self.radious < WIDHT//2:
-            self.x += self.x_vel
+        if abs(self.x+math.floor(self.x_vel))+self.radious < WIDHT//2:
+            self.x += math.floor(self.x_vel)
         else:
             self.x_vel = 0
     
-    def jump(self, platforms):
+    def jump(self, semi_solids):
+        
+        def collision():
+            for semi_solid in semi_solids:
+                x_aligned = semi_solid.x_end >= self.x >= semi_solid.x
+                under_if_fell = self.y + self.y_vel <= semi_solid.y
+                above_ss = self.y > semi_solid.y
+                
+                if x_aligned and under_if_fell and above_ss:
+                    return True
+            return False
+    
         key = pygame.key.get_pressed()
-        
-        if self.y > 1:
-            self.y -= 1
-        
-        if self.y <= 1:
-            self.y = 0
+
+        if collision():
+            self.y_vel = 0
+
+        if not collision():
+            self.y_vel -= Player.GRAVITY
+
+        if collision():
             if key[self.up_key]:
-                self.y += 25
+                self.y_vel = Player.UPFORCE
+            elif key[self.down_key]:
+                self.y -= 3
+
+        if not collision():
+            self.y += round(self.y_vel)
+    
+    def death(self):
+        if self.y < 0:
+            return True
+        return False
 
 
 # # # # # #
 
 
-def draw_window(players, platforms):
+def draw_window(players, semi_solids):
     WIN.fill(BLACK)
 
-    for platform in platforms:
-        platform.draw(WIN)
+    for semi_solid in semi_solids:
+        semi_solid.draw(WIN)
     for player in players:
         player.draw(WIN)
 
@@ -114,22 +139,24 @@ def main():
     clock = pygame.time.Clock()
     run = True
 
-    Player1 = Player(0, 300, 10, WHITE, pygame.K_w, pygame.K_d, pygame.K_a)
-    Ground = Platform(-1*WIDHT//2, 100, WIDHT, 1, WHITE)
+    Player1 = Player(0, 300, 15, WHITE, pygame.K_w, pygame.K_s, pygame.K_d, pygame.K_a)
+    Ground = SemiSolid(-1*WIDHT//2, 50, WIDHT, HEIGHT, WHITE)
+    SemiSolid1 = SemiSolid(-100, 250, 2*WIDHT//5, 10, RED)
+    SemiSolid2 = SemiSolid(-400, 400, 2*WIDHT//5, 10, (0, 255, 0))
 
     players = [Player1]
-    platforms = [Ground]
+    semi_solids = [Ground, SemiSolid1, SemiSolid2]
 
     while run:
         clock.tick(FPS)
         for event in pygame.event.get():
-            if (event.type == pygame.QUIT) or (pygame.key.get_pressed()[pygame.K_ESCAPE]):
+            if (event.type == pygame.QUIT) or (pygame.key.get_pressed()[pygame.K_ESCAPE]) or (Player1.death()):
                 run = False
 
         for player in players:
-            player.jump(platforms)
+            player.jump(semi_solids)
             player.move()
-        draw_window(players, platforms)
+        draw_window(players, semi_solids)
 
     pygame.quit()
 
